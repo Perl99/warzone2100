@@ -747,7 +747,7 @@ void actionUpdateDroid(DROID *psDroid)
 		                           order->psObj->pos.x, order->psObj->pos.y, ((STRUCTURE *)order->psObj)->rot.direction,
 		                           ((STRUCTURE *)order->psObj)->pStructureType))
 		{
-			moveDroidToNoFormation(psDroid, order->psObj->pos.x, order->psObj->pos.y);
+			moveDroidTo(psDroid, order->psObj->pos.x, order->psObj->pos.y);
 		}
 		break;
 	case DACTION_TRANSPORTWAITTOFLYIN:
@@ -1547,7 +1547,7 @@ void actionUpdateDroid(DROID *psDroid)
 		else if (DROID_STOPPED(psDroid))
 		{
 			objTrace(psDroid->id, "DACTION_MOVETOBUILD: Starting to drive toward construction site - move status was %d", (int)psDroid->sMove.Status);
-			moveDroidToNoFormation(psDroid, psDroid->actionPos.x, psDroid->actionPos.y);
+			moveDroidTo(psDroid, psDroid->actionPos.x, psDroid->actionPos.y);
 		}
 		break;
 	case DACTION_BUILD:
@@ -1561,7 +1561,7 @@ void actionUpdateDroid(DROID *psDroid)
 		    !actionReachedBuildPos(psDroid, psDroid->actionPos.x, psDroid->actionPos.y, order->direction, order->psStats))
 		{
 			objTrace(psDroid->id, "DACTION_BUILD: Starting to drive toward construction site");
-			moveDroidToNoFormation(psDroid, psDroid->actionPos.x, psDroid->actionPos.y);
+			moveDroidTo(psDroid, psDroid->actionPos.x, psDroid->actionPos.y);
 		}
 		else if (!DROID_STOPPED(psDroid) &&
 		         psDroid->sMove.Status != MOVETURNTOTARGET &&
@@ -1614,7 +1614,7 @@ void actionUpdateDroid(DROID *psDroid)
 		}
 		else if (DROID_STOPPED(psDroid))
 		{
-			moveDroidToNoFormation(psDroid, psDroid->actionPos.x, psDroid->actionPos.y);
+			moveDroidTo(psDroid, psDroid->actionPos.x, psDroid->actionPos.y);
 		}
 		break;
 
@@ -1651,7 +1651,7 @@ void actionUpdateDroid(DROID *psDroid)
 			if (order->type != DORDER_HOLD && (!secHoldActive || (secHoldActive && order->type != DORDER_NONE)))
 			{
 				objTrace(psDroid->id, "Secondary order: Go to construction site");
-				moveDroidToNoFormation(psDroid, psDroid->actionPos.x, psDroid->actionPos.y);
+				moveDroidTo(psDroid, psDroid->actionPos.x, psDroid->actionPos.y);
 			}
 			else
 			{
@@ -1694,7 +1694,7 @@ void actionUpdateDroid(DROID *psDroid)
 		}
 		else if (DROID_STOPPED(psDroid))
 		{
-			moveDroidToNoFormation(psDroid, psDroid->psActionTarget[0]->pos.x,
+			moveDroidTo(psDroid, psDroid->psActionTarget[0]->pos.x,
 			                       psDroid->psActionTarget[0]->pos.y);
 		}
 		break;
@@ -2184,7 +2184,7 @@ static void actionDroidBase(DROID *psDroid, DROID_ACTION_DATA *psAction)
 		psDroid->action = DACTION_MOVETOBUILD;
 		psDroid->actionPos.x = psAction->x;
 		psDroid->actionPos.y = psAction->y;
-		moveDroidToNoFormation(psDroid, psDroid->actionPos.x, psDroid->actionPos.y);
+			moveDroidTo(psDroid, psDroid->actionPos.x, psDroid->actionPos.y);
 		break;
 	case DACTION_DEMOLISH:
 		ASSERT_OR_RETURN(, order->type == DORDER_DEMOLISH, "cannot start demolish action without a demolish order");
@@ -2253,7 +2253,7 @@ static void actionDroidBase(DROID *psDroid, DROID_ACTION_DATA *psAction)
 		psDroid->actionPos.y = psAction->y;
 		psDroid->actionStarted = gameTime;
 		setDroidActionTarget(psDroid, psAction->psObj, 0);
-		moveDroidToNoFormation(psDroid, psAction->x, psAction->y);
+			moveDroidTo(psDroid, psAction->x, psAction->y);
 		break;
 	case DACTION_WAITDURINGREPAIR:
 		psDroid->action = DACTION_WAITDURINGREPAIR;

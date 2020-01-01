@@ -30,14 +30,10 @@
 /* Set a target location for a droid to move to  - returns a bool based on if there is a path to the destination (true if there is a path)*/
 bool moveDroidTo(DROID *psDroid, UDWORD x, UDWORD y, FPATH_MOVETYPE moveType = FMT_MOVE);
 
-/* Set a target location for a droid to move to  - returns a bool based on if there is a path to the destination (true if there is a path)*/
-// the droid will not join a formation when it gets to the location
-bool moveDroidToNoFormation(DROID *psDroid, UDWORD x, UDWORD y, FPATH_MOVETYPE moveType = FMT_MOVE);
-
 // move a droid directly to a location (used by vtols only)
 void moveDroidToDirect(DROID *psDroid, UDWORD x, UDWORD y);
 
-// Get a droid to turn towards a locaton
+// Get a droid to turn towards a location
 void moveTurnDroid(DROID *psDroid, UDWORD x, UDWORD y);
 
 /* Stop a droid */
@@ -51,17 +47,11 @@ void moveUpdateDroid(DROID *psDroid);
 
 SDWORD moveCalcDroidSpeed(DROID *psDroid);
 
-/* Frame update for the movement of a tracked droid */
-void moveUpdateTracked(DROID *psDroid);
-
 /* update body and turret to local slope */
 void updateDroidOrientation(DROID *psDroid);
 
 /* audio callback used to kill movement sounds */
 bool moveCheckDroidMovingAndVisible(void *psObj);
-
-// set a vtol to be hovering in the air
-void moveMakeVtolHover(DROID *psDroid);
 
 const char *moveDescription(MOVE_STATUS status);
 
