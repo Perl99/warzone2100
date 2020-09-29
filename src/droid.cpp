@@ -710,6 +710,7 @@ void droidUpdate(DROID *psDroid)
 	syncDebugDroid(psDroid, 'M');
 
 	// update the move system
+	// TODO: is this really needed? There is droid update with call tree containing recvMessage(). Maybe in this call tree flowfield can only ask about current movement vector?
 	moveUpdateDroid(psDroid);
 
 	/* Only add smoke if they're visible */

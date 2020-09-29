@@ -39,6 +39,7 @@
 #include "astar.h"
 
 #include "fpath.h"
+#include "flowfield.h"
 
 // If the path finding system is shutdown or not
 static volatile bool fpathQuit = false;
@@ -448,6 +449,30 @@ FPATH_RETVAL fpathDroidRoute(DROID *psDroid, SDWORD tX, SDWORD tY, FPATH_MOVETYP
 		acceptNearest = true;
 		break;
 	}
+
+	if (flowfield::isEnabled()) {
+		auto path = flowfield::getPathFromCache(startPos.x, startPos.y, tX, tY, psPropStats->propulsionType);
+
+		if (!path.empty())
+		{
+			
+			psDroid->sMove.Status = MOVENAVIGATE;
+			psDroid->sMove.portalPath = path;
+			
+			// High-level path when flowfield is not available yet
+			psDroid->sMove.pathIndex = 0;
+			psDroid->sMove.asPath = flowfield::portalPathToCoordsPath(path, psPropStats->propulsionType);
+			psDroid->sMove.asPath.push_back(Vector2i(tX, tY));
+
+			objTrace(psDroid->id, "Got a portal path to (%d, %d)! Length=%d", psDroid->sMove.destination.x, psDroid->sMove.destination.y, static_cast<int>(psDroid->sMove.portalPath.size()));
+			return FPR_OK;
+		} else {
+			flowfield::calculateFlowFieldsAsync(&psDroid->sMove, psDroid->id, startPos.x, startPos.y, endPos.x, endPos.y, psPropStats->propulsionType,
+												psDroid->droidType, moveType, psDroid->player, acceptNearest, dstStructure);
+			return FPR_WAIT;
+		}
+	}
+	
 	return fpathRoute(&psDroid->sMove, psDroid->id, startPos.x, startPos.y, endPos.x, endPos.y, psPropStats->propulsionType,
 	                  psDroid->droidType, moveType, psDroid->player, acceptNearest, dstStructure);
 }

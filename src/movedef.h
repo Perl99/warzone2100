@@ -27,18 +27,19 @@
 #include "lib/framework/vector.h"
 
 #include <vector>
+#include <deque>
 
 enum MOVE_STATUS
 {
-	MOVEINACTIVE,
-	MOVENAVIGATE,
-	MOVETURN,
+	MOVEINACTIVE,		// Droid not moves
+	MOVENAVIGATE,		// Droid just started moving: looks for next waypoint in A* path, then continues point-to-point
+	MOVETURN,			// Droid moves point-to-point in next frame if VTOL, or stops moving
 	MOVEPAUSE,
-	MOVEPOINTTOPOINT,
-	MOVETURNTOTARGET,
-	MOVEHOVER,
-	MOVEWAITROUTE,
-	MOVESHUFFLE,
+	MOVEPOINTTOPOINT,	// Droid moves from one waypoint to another
+	MOVETURNTOTARGET,	// Droid turns to target direction with speed of 0
+	MOVEHOVER,			// Droids moves while hovering
+	MOVEWAITROUTE,		// Droid waits for A* to finish but starts moving in target direction
+	MOVESHUFFLE,		// Droid moves a bit around waypoint
 };
 
 struct MOVE_CONTROL
@@ -46,6 +47,9 @@ struct MOVE_CONTROL
 	MOVE_STATUS Status = MOVEINACTIVE;    ///< Inactive, Navigating or moving point to point status
 	int pathIndex = 0;                    ///< Position in asPath
 	std::vector<Vector2i> asPath;         ///< Pointer to list of block X,Y map coordinates.
+
+	// TODO: rethink, this could be a map instead, but it might happen that we enter the same sector twice (for example, when sector is divided by a wall into two unconnected halfs)
+	std::vector<std::pair<unsigned int, unsigned int>> portalPath;  ///< Sequence of pairs (sectorId, portalId) to visit (flowfield)
 
 	Vector2i destination = Vector2i(0, 0);                 ///< World coordinates of movement destination
 	Vector2i src = Vector2i(0, 0);

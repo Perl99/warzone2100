@@ -91,6 +91,7 @@
 #include "qtscript.h"
 #include "template.h"
 #include "activity.h"
+#include "flowfield.h"
 
 #include <algorithm>
 
@@ -816,6 +817,7 @@ void systemShutdown()
 	notificationsShutDown();
 	widgShutDown();
 	fpathShutdown();
+	flowfield::destroy();
 	mapShutdown();
 	debug(LOG_MAIN, "shutting down everything else");
 	pal_ShutDown();		// currently unused stub
@@ -1273,6 +1275,8 @@ bool stageThreeInitialise()
 		return false;
 	}
 
+	flowfield::init();
+
 	mapInit();
 	gridReset();
 
@@ -1391,6 +1395,8 @@ bool stageThreeShutDown()
 	}
 
 	setScriptWinLoseVideo(PLAY_NONE);
+
+    flowfield::destroy();
 
 	return true;
 }

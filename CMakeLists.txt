@@ -7,10 +7,19 @@ OPTION(WZ_PORTABLE "Portable (Windows-only)" ON)
 OPTION(WZ_ENABLE_WARNINGS "Enable (additional) warnings" OFF)
 OPTION(WZ_ENABLE_WARNINGS_AS_ERRORS "Enable compiler flags that treat (most) warnings as errors" ON)
 OPTION(WZ_ENABLE_BACKEND_VULKAN "Enable Vulkan backend" ON)
+OPTION(FORCE_COLORED_OUTPUT "Always produce ANSI-colored output (GNU/Clang only)." OFF)
 
 if(CMAKE_SYSTEM_NAME MATCHES "Windows" OR CMAKE_SYSTEM_NAME MATCHES "Darwin" OR CMAKE_SYSTEM_NAME MATCHES "Linux")
 	# Only supported on Windows, macOS, and Linux
 	OPTION(ENABLE_DISCORD "Enable Discord presence / join integration" ON)
+endif()
+
+if (${FORCE_COLORED_OUTPUT})
+	if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+		add_compile_options (-fdiagnostics-color=always)
+	elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+		add_compile_options (-fcolor-diagnostics)
+	endif()
 endif()
 
 set(WZ_DISTRIBUTOR "UNKNOWN" CACHE STRING "Name of distributor compiling this package")
@@ -41,6 +50,11 @@ if(MSVC)
 	# See https://docs.microsoft.com/en-us/cpp/build/reference/std-specify-language-standard-version
 	# However, avoid using any features not supported by c++11 or the build will fail on other platforms.
 	set(CMAKE_CXX_STANDARD 14)
+
+	# Visual Studio 2017 15.8 introduced "Just my code" for C++. I'm not sure about exact compiler version it is available from
+	if (MSVC_VERSION GREATER_EQUAL "1915")
+		set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /JMC")
+	endif()
 else()
 	set(CMAKE_CXX_STANDARD 11)
 endif()

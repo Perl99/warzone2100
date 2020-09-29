@@ -32,6 +32,7 @@
 #include "lib/sound/audio.h"
 #include "lib/sound/audio_id.h"
 #include "lib/ivis_opengl/ivisdef.h"
+#include "glm/geometric.hpp"
 #include "console.h"
 
 #include "move.h"
@@ -55,6 +56,7 @@
 #include "random.h"
 #include "mission.h"
 #include "qtscript.h"
+#include "flowfield.h"
 
 /* max and min vtol heights above terrain */
 #define	VTOL_HEIGHT_MIN				250
@@ -447,7 +449,7 @@ static bool moveBlockingTileCallback(Vector2i pos, int32_t dist, void *data_)
 	return !data->blocking;
 }
 
-// Returns -1 - distance if the direct path to the waypoint is blocked, otherwise returns the distance to the waypoint.
+// Returns "-1 - distance" if the direct path to the waypoint is blocked, otherwise returns the distance to the waypoint.
 static int32_t moveDirectPathToWaypoint(DROID *psDroid, unsigned positionIndex)
 {
 	Vector2i src(psDroid->pos.xy());
@@ -2032,6 +2034,98 @@ static void checkLocalFeatures(DROID *psDroid)
 	}
 }
 
+// check the location for vtols
+static void moveVtolLandIfPossible(DROID *psDroid) {
+	Vector2i tar = psDroid->pos.xy();
+	if (psDroid->order.type != DORDER_PATROL && psDroid->order.type != DORDER_CIRCLE  // Not doing an order which means we never land (which means we might want to land).
+		&& psDroid->action != DACTION_MOVETOREARM && psDroid->action != DACTION_MOVETOREARMPOINT
+		&& actionVTOLLandingPos(psDroid, &tar)  // Can find a sensible place to land.
+		&& map_coord(tar) != map_coord(psDroid->sMove.destination))  // We're not at the right place to land.
+	{
+		psDroid->sMove.destination = tar;
+		moveDroidTo(psDroid, psDroid->sMove.destination.x, psDroid->sMove.destination.y);
+	}
+	else
+	{
+		psDroid->sMove.Status = MOVEHOVER;
+	}
+}
+
+// Returns true if reached destination
+static bool movePointToPoint(DROID *psDroid, PROPULSION_STATS *psPropStats) {
+	// moving between two way points
+	if (psDroid->sMove.asPath.size() == 0)
+	{
+		debug(LOG_WARNING, "No path to follow, but psDroid->sMove.Status = %d", psDroid->sMove.Status);
+	}
+
+	// Get the best control point.
+	if (psDroid->sMove.asPath.size() == 0 || !moveBestTarget(psDroid))
+	{
+		// Got stuck somewhere, can't find the path.
+		moveDroidTo(psDroid, psDroid->sMove.destination.x, psDroid->sMove.destination.y);
+	}
+
+	// See if the target point has been reached and move onto the next waypoint
+	if (moveReachedWayPoint(psDroid) && !moveNextTarget(psDroid))
+	{
+		// No more waypoints - finish
+		if (psPropStats->propulsionType == PROPULSION_TYPE_LIFT)
+		{
+			moveVtolLandIfPossible(psDroid);
+		}
+		else
+		{
+			psDroid->sMove.Status = MOVETURN;
+		}
+		objTrace(psDroid->id, "Arrived at destination!");
+		return true;
+	}
+
+	return false;
+}
+
+static void moveFlowField(DROID *psDroid, PROPULSION_STATS *psPropStats) {
+	auto distance = std::abs(glm::distance(Vector2f(psDroid->sMove.destination), Vector2f(psDroid->sMove.src)));
+
+	if (distance < TILE_UNITS) {
+		// Emulate arriving at the last waypoint
+		psDroid->sMove.pathIndex = psDroid->sMove.asPath.size() - 1;
+		movePointToPoint(psDroid, psPropStats);
+		return;
+	}
+
+	auto currentSectorId = flowfield::getCurrentSectorId(psDroid->pos.x, psDroid->pos.y);
+	// TODO: this does not handle cases when the sector is present more than once
+	auto currentSectorPortalIter = std::find_if(psDroid->sMove.portalPath.begin(), psDroid->sMove.portalPath.end(),
+        [=](const std::pair<unsigned, unsigned>&  pair) {
+		    return pair.first == currentSectorId;
+	    }
+	);
+
+
+	Vector2f vector;
+	if (currentSectorPortalIter != psDroid->sMove.portalPath.end()) {
+		auto portalId = currentSectorPortalIter->second;
+		vector = flowfield::getMovementVector(portalId, psDroid->pos.x, psDroid->pos.y, psPropStats->propulsionType);
+	} else {
+		vector = flowfield::getMovementVectorToFinalGoal(psDroid->sMove.destination.x, psDroid->sMove.destination.y, psDroid->pos.x, psDroid->pos.y, psPropStats->propulsionType);
+	}
+
+	if (vector == Vector2f(0.0, 0.0)) {
+		// TODO: handle case when no flow field for current position. Try to navigate high-level, or schedule pathfind from current position
+		objTrace(psDroid->id, "No vector field data");
+		// TODO: For purposes of debugging, we make the droid stop. We should instead navigate high-level, or schedule pathfind from current position
+		psDroid->sMove.Status = MOVEINACTIVE;
+		//moveNextTarget(psDroid);
+	}
+	else {
+		psDroid->sMove.src = psDroid->pos.xy();
+		// New target is current position + normalized vector (<=1)
+		// TODO: magic numbers
+		psDroid->sMove.target = psDroid->pos.xy() + Vector2i(vector.x * 500, vector.y * 500);
+	}
+}
 
 /* Frame update for the movement of a tracked droid */
 void moveUpdateDroid(DROID *psDroid)
@@ -2135,57 +2229,17 @@ void moveUpdateDroid(DROID *psDroid)
 		// fallthrough
 	case MOVEPOINTTOPOINT:
 	case MOVEPAUSE:
-		// moving between two way points
-		if (psDroid->sMove.asPath.size() == 0)
-		{
-			debug(LOG_WARNING, "No path to follow, but psDroid->sMove.Status = %d", psDroid->sMove.Status);
-		}
-
-		// Get the best control point.
-		if (psDroid->sMove.asPath.size() == 0 || !moveBestTarget(psDroid))
-		{
-			// Got stuck somewhere, can't find the path.
-			moveDroidTo(psDroid, psDroid->sMove.destination.x, psDroid->sMove.destination.y);
-		}
-
-		// See if the target point has been reached
-		if (moveReachedWayPoint(psDroid))
-		{
-			// Got there - move onto the next waypoint
-			if (!moveNextTarget(psDroid))
-			{
-				// No more waypoints - finish
-				if (psPropStats->propulsionType == PROPULSION_TYPE_LIFT)
-				{
-					// check the location for vtols
-					Vector2i tar = psDroid->pos.xy();
-					if (psDroid->order.type != DORDER_PATROL && psDroid->order.type != DORDER_CIRCLE  // Not doing an order which means we never land (which means we might want to land).
-					    && psDroid->action != DACTION_MOVETOREARM && psDroid->action != DACTION_MOVETOREARMPOINT
-					    && actionVTOLLandingPos(psDroid, &tar)  // Can find a sensible place to land.
-					    && map_coord(tar) != map_coord(psDroid->sMove.destination))  // We're not at the right place to land.
-					{
-						psDroid->sMove.destination = tar;
-						moveDroidTo(psDroid, psDroid->sMove.destination.x, psDroid->sMove.destination.y);
-					}
-					else
-					{
-						psDroid->sMove.Status = MOVEHOVER;
-					}
-				}
-				else
-				{
-					psDroid->sMove.Status = MOVETURN;
-				}
-				objTrace(psDroid->id, "Arrived at destination!");
-				break;
-			}
+		if (flowfield::isEnabled()) {
+			moveFlowField(psDroid, psPropStats);
+		} else if (movePointToPoint(psDroid, psPropStats)) {
+			break; // Arrived at destination
 		}
 
 		moveDir = moveGetDirection(psDroid);
 		moveSpeed = moveCalcDroidSpeed(psDroid);
 
 		if ((psDroid->sMove.bumpTime != 0) &&
-		    (psDroid->sMove.pauseTime + psDroid->sMove.bumpTime + BLOCK_PAUSETIME < gameTime))
+			(psDroid->sMove.pauseTime + psDroid->sMove.bumpTime + BLOCK_PAUSETIME < gameTime))
 		{
 			if (psDroid->sMove.Status == MOVEPOINTTOPOINT)
 			{
@@ -2199,9 +2253,9 @@ void moveUpdateDroid(DROID *psDroid)
 		}
 
 		if ((psDroid->sMove.Status == MOVEPAUSE) &&
-		    (psDroid->sMove.bumpTime != 0) &&
-		    (psDroid->sMove.lastBump > psDroid->sMove.pauseTime) &&
-		    (psDroid->sMove.lastBump + psDroid->sMove.bumpTime + BLOCK_PAUSERELEASE < gameTime))
+			(psDroid->sMove.bumpTime != 0) &&
+			(psDroid->sMove.lastBump > psDroid->sMove.pauseTime) &&
+			(psDroid->sMove.lastBump + psDroid->sMove.bumpTime + BLOCK_PAUSERELEASE < gameTime))
 		{
 			psDroid->sMove.Status = MOVEPOINTTOPOINT;
 		}
@@ -2270,19 +2324,6 @@ void moveUpdateDroid(DROID *psDroid)
 		objTrace(psDroid->id, "status: id %d blocked", (int)psDroid->id);
 		psDroid->sMove.Status = MOVETURN;
 	}
-
-//	// If were in drive mode and the droid is a follower then stop it when it gets within
-//	// range of the driver.
-//	if(driveIsFollower(psDroid)) {
-//		if(DoFollowRangeCheck) {
-//			if(driveInDriverRange(psDroid)) {
-//				psDroid->sMove.Status = MOVEINACTIVE;
-////				ClearFollowRangeCheck = true;
-//			} else {
-//				AllInRange = false;
-//			}
-//		}
-//	}
 
 	/* If it's sitting in water then it's got to go with the flow! */
 	if (worldOnMap(psDroid->pos.x, psDroid->pos.y) && terrainType(mapTile(map_coord(psDroid->pos.x), map_coord(psDroid->pos.y))) == TER_WATER)
